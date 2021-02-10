@@ -1,1 +1,59 @@
 // app global css in SCSS form
+body {
+  font-family: 'Sarabun', 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 15px;
+}
+
+.q-btn {
+  border-radius: 4px;
+}
+
+.tracking-wider {
+  letter-spacing: 0.05rem;
+}
+
+.tracking-wide {
+  letter-spacing: 0.025rem;
+}
+
+.q-table__control {
+  font-size: 1rem;
+  color: #031B4E;
+}
+
+.menu-item:hover {
+  line-height: 24px;
+  border-radius: 5px;
+  margin: 4px 0 4px 24px;
+  color: #031B4E;
+  transition: all 0.5s;
+}
+
+.active-menu-item {
+  line-height: 24px;
+  border-radius: 5px;
+  margin: 0 0 0 24px;
+  background-color: rgb(0, 106, 255, 0.1);
+  color: rgb(0, 106, 255);
+}
+
+.active-menu-item:hover {
+  line-height: 24px;
+  border-radius: 5px;
+  margin: 0 0 0 24px;
+  color: rgb(0, 106, 255);
+}
+
+.menu-item-active {
+  line-height: 24px;
+  border-radius: 5px;
+  margin: 4px 4px 4px 4px;
+  background-color: rgb(0, 106, 255, 0.1);
+  color: rgb(0, 106, 255);
+}
+
+.list-item-active {
+  line-height: 24px;
+  background-color: rgb(0, 106, 255, 0.1);
+  color: rgb(0, 106, 255);
+}
