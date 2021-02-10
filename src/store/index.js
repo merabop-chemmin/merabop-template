@@ -1,7 +1,9 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
 
-// import example from './module-example'
+import auth from "src/store/auth/store-auth";
+import activity from "src/store/auth/store-useractivity"
+import user from "src/store/auth/store-user"
 
 Vue.use(Vuex)
 
@@ -15,15 +17,24 @@ Vue.use(Vuex)
  */
 
 export default function (/* { ssrContext } */) {
-  const Store = new Vuex.Store({
-    modules: {
-      // example
-    },
+    const Store = new Vuex.Store({
+        modules: {
+            auth,
+            activity,
+            user,
+            // CUSTOMER
 
-    // enable strict mode (adds overhead!)
-    // for dev mode only
-    strict: process.env.DEBUGGING
-  })
+            // PRODUCT
 
-  return Store
+            // RUNNING NUMBER
+
+            // DROPDOWN OPTIONS
+        },
+
+        // enable strict mode (adds overhead!)
+        // for dev mode only
+        strict: process.env.DEBUGGING
+    })
+
+    return Store
 }

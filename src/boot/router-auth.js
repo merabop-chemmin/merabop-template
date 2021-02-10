@@ -1,7 +1,19 @@
-// import something here
+import { LocalStorage } from "quasar";
 
-// "async" is optional;
-// more info on params: https://quasar.dev/quasar-cli/boot-files
-export default async (/* { app, router, Vue ... } */) => {
-  // something to do
+export default ({ router }) => {
+    router.beforeEach((to, from, next) => {
+        // if (to.name === "supplier-supplierUID-transfer2") {
+        //     // SET LOCALSTORAGE => anonymous
+        //     // SET SUPPLIER UID => supplierUID
+        //     if (LocalStorage === 'anonymous') {
+        //         supplier-supplierUID-transfer2
+        //     }
+        // }
+        let userIsLoggedIn = LocalStorage.getItem('userIsLoggedIn')
+        if (!userIsLoggedIn && to.name !== 'sign-in') {
+            next({ name: 'sign-in' })
+        } else {
+            next()
+        }
+    })
 }
