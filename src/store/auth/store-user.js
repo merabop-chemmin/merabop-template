@@ -1,12 +1,16 @@
 import Vue from "vue"
-import {Dialog, Notify, QSpinner} from "quasar"
+import {Dialog, QSpinnerOrbit} from "quasar"
 import firebase from "firebase/app"
-import {firestore, functions} from "src/boot/firebase"
+import { firestore, functions} from "src/boot/firebase"
+import {showSimpleNotification} from "src/functions/show-simple-notification";
+
+let docRef = firestore.collection("users")
 
 const state = {
     users: {},
     user: {},
     editingUser: {},
+    summary: {},
     bannerRegisteringUser: {
         message: "",
         color: "",
@@ -31,6 +35,9 @@ const mutations = {
     SET_EDITING_USER(state, payload) {
         state.editingUser = payload
     },
+    RESET_USERS(state) {
+        state.users = {}
+    },
     SET_BANNER_REGISTERING_USER(state, payload) {
         state.bannerRegisteringUser = payload
     },
@@ -52,13 +59,22 @@ const mutations = {
     SET_SHOW_BANNER_REGISTERING_USER(state, value) {
         state.showBannerRegisteringUser = value
     },
+    SET_SUMMARY(state, payload) {
+        state.summary = payload
+    },
 }
 
 const actions = {
-    async firestoreGetUsers(context) {
+    async firestoreFetchUsers(context, { filter }) {
+        context.commit("RESET_USERS")
         context.commit("SET_USERS_IS_LOADING", true)
+        let documentRef = docRef
         try {
-            const response = await firestore.collection("admin").doc("organization").collection("users").orderBy("id").onSnapshot((querySnapshot) => {
+            documentRef = documentRef.where("active", "==", filter.active)
+            if (filter.position) { documentRef = documentRef.where("position", "==", filter.position) }
+            if (filter.firstname_en) { documentRef = documentRef.orderBy("firstname_en").startAt(filter.firstname_en).endAt(filter.firstname_en + "\uf8ff") }
+
+            await documentRef.onSnapshot((querySnapshot) => {
                 querySnapshot.forEach((doc) => {
                     context.commit("SET_USERS", {uid: doc.id, ...doc.data()})
                 })
@@ -66,42 +82,58 @@ const actions = {
             })
         } catch (error) {
             context.commit("SET_USERS_IS_LOADING", false)
-            Dialog.create({title: "เกิดข้อผิดพลาดในการดึงข้อมูล", message: error.message})
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
+        }
+    },
+    async firestoreGetSummary(context) {
+        try {
+            await docRef.doc("summary").get().then((doc) => {
+                context.commit("SET_SUMMARY", {uid: doc.id, ...doc.data()})
+            })
+        } catch (error) {
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
+        }
+    },
+    async firestoreGetUsers(context) {
+        context.commit("RESET_USERS")
+        context.commit("SET_USERS_IS_LOADING", true)
+        try {
+            await docRef.orderBy("firstname_en").onSnapshot((querySnapshot) => {
+                querySnapshot.forEach((doc) => {
+                    context.commit("SET_USERS", {uid: doc.id, ...doc.data()})
+                })
+                context.commit("SET_USERS_IS_LOADING", false)
+            })
+        } catch (error) {
+            context.commit("SET_USERS_IS_LOADING", false)
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
         }
     },
     async firestoreGetUser(context, {userUID}) {
         context.commit("SET_USER_IS_LOADING", true)
         try {
-            const response = await firestore.collection("admin").doc("organization").collection("users").doc(userUID).get()
-            if (response.exists) {
-                context.commit("SET_USER", {uid: response.id, ...response.data()})
-                context.commit("SET_USER_IS_LOADING", false)
-            } else {
-                context.commit("SET_USER_IS_LOADING", false)
-                Dialog.create({title: "เกิดข้อผิดพลาดในการดึงข้อมูล", message: "ไม่พบข้อมูล"})
-            }
+            await docRef.doc(userUID).get().then((doc) => {
+                context.commit("SET_USER", {uid: doc.id, ...doc.data()})
+            })
+            context.commit("SET_USER_IS_LOADING", false)
         } catch (error) {
             context.commit("SET_USER_IS_LOADING", false)
-            Dialog.create({title: "เกิดข้อผิดพลาดในการดึงข้อมูล", message: error.message})
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
         }
     },
-    async firestoreGetEditingUser(context, { editingUserUID }) {
+    async firestoreGetEditingUser(context, {editingUserUID}) {
         context.commit("SET_USER_IS_LOADING", true)
         try {
-            const response = await firestore.collection("admin").doc("organization").collection("users").doc(editingUserUID).get()
-            if (response.exists) {
-                context.commit("SET_EDITING_USER", {uid: response.uid, ...response.data()})
-                context.commit("SET_USER_IS_LOADING", false)
-            } else {
-                context.commit("SET_USER_IS_LOADING", false)
-                Dialog.create({title: "เกิดข้อผิดพลาดในการดึงข้อมูล", message: "ไม่พบข้อมูล"})
-            }
+            await docRef.doc(editingUserUID).get().then((doc) => {
+                context.commit("SET_EDITING_USER", {uid: doc.id, ...doc.data()})
+            })
+            context.commit("SET_USER_IS_LOADING", false)
         } catch (error) {
             context.commit("SET_USER_IS_LOADING", false)
-            Dialog.create({title: "เกิดข้อผิดพลาดในการดึงข้อมูล", message: error.message})
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
         }
     },
-    async functionsCreateUser(context, { userData }) {
+    async firestoreCreateUser(context, { userData }) {
         context.commit("SET_USER_IS_REGISTERING", true)
         context.commit("SET_SHOW_BANNER_REGISTERING_USER", true)
         context.commit("SET_BANNER_REGISTERING_USER", {
@@ -112,143 +144,135 @@ const actions = {
         })
 
         try {
-            // INCREMENT TOTAL USERS WHEN DEPARTMENT IS CREATED
-            await firestore.collection("summary").doc("admin").collection("users").doc("total").get()
-                .then(total => {
-                    if (total.exists) {
-                        const increment = firebase.firestore.FieldValue.increment(1)
-                        firestore.collection("summary").doc("admin").collection("users").doc("total").update({total: increment})
+            // INCREMENT TOTAL USERS WHEN CREATE USER
+            await docRef.doc("summary").get()
+                .then((response) => {
+                    if (response.exists) {
+                        let increment = firebase.firestore.FieldValue.increment(1)
+                        docRef.doc("summary").update({total: increment, active: increment, disable: response.data().disable})
                     } else {
-                        firestore.collection("summary").doc("admin").collection("users").doc("total").set({total: 1})
+                        docRef.doc("summary").set({ total: 1, active: 1, disable: 0 })
                     }
                 })
 
-            let cloudFunctionsCreateUser = functions.httpsCallable('cloudFunctionsCreateUser')
-            cloudFunctionsCreateUser(userData)
+            let cloudFunctionCreateUser = functions.httpsCallable('cloudFunctionsCreateUser')
+            cloudFunctionCreateUser(userData)
                 .then((response) => {
                     console.log(response)
                     context.commit("SET_BANNER_REGISTERING_USER", {
-                        message: response.data.firebaseMessage.errorInfo.message ? response.data.message + " : " + response.data.firebaseMessage.errorInfo.message : response.data.message,
-                        color: "bg-" + response.data.color,
+                        message: "successfully registered new user",
+                        color: "bg-positive",
                         btnLabel: "",
-                        btnIcon: response.data.status === "success" ? "eva-checkmark-outline" : "eva-alert-triangle-outline",
+                        btnIcon: "eva-checkmark-outline",
                     })
                     context.commit("SET_USER_IS_REGISTERING", false)
                 })
                 .catch((error) => {
                     context.commit("SET_BANNER_REGISTERING_USER", {
-                        message: error.data.message,
-                        color: "bg-" + error.data.color,
+                        message: "error creating new user in document",
+                        color: "bg-negative",
                         btnLabel: "",
-                        btnIcon: response.data.status === "success" ? "eva-checkmark-outline" : "eva-alert-triangle-outline",
+                        btnIcon: "eva-alert-triangle-outline",
                     })
                     context.commit("SET_USER_IS_REGISTERING", false)
                 })
-        }
-        catch (error) {
+        } catch (error) {
             context.commit("SET_USER_IS_REGISTERING", false)
-            Dialog.create({title: "เกิดข้อผิดพลาดในการเพิ่มข้อมูล", message: error.message})
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
         }
-
-        // return new Promise((resolve, reject) => {
-        //     let cloudFunctionsCreateUser = functions.httpsCallable('cloudFunctionsCreateUser')
-        //     cloudFunctionsCreateUser(userData)
-        //         .then((response) => {
-        //             context.commit("SET_BANNER_REGISTERING_USER", {
-        //                 message: "successfully registered new user",
-        //                 color: "bg-positive",
-        //                 btnLabel: "",
-        //                 btnIcon: "eva-checkmark-outline",
-        //             })
-        //             context.commit("SET_USER_IS_REGISTERING", false)
-        //             resolve()
-        //         })
-        //         .catch((error) => {
-        //             context.commit("SET_BANNER_REGISTERING_USER", {
-        //                 message: "there was an error registering a new user",
-        //                 color: "bg-negative",
-        //                 btnLabel: "",
-        //                 btnIcon: "eva-alert-triangle-outline",
-        //             })
-        //             context.commit("SET_USER_IS_REGISTERING", false)
-        //             reject()
-        //         })
-        // })
-
     },
     async firestoreUpdateUser(context, { editingUserUID, editingUserData, userData }) {
         try {
-            const response = await firestore.collection("admin").doc("organization").collection("users").doc(editingUserUID).update({
+            await docRef.doc(editingUserUID).update({
                 // USER
-                firstname_en        : editingUserData.firstname_en,
-                lastname_en         : editingUserData.lastname_en,
-                fullname_en         : editingUserData.fullname_en,
-                firstname_th        : editingUserData.firstname_th,
-                lastname_th         : editingUserData.lastname_th,
-                fullname_th         : editingUserData.fullname_th,
-                user_uid            : editingUserData.user_uid,
-                username            : editingUserData.username,
+                firstname_en                     : editingUserData.firstname_en,
+                lastname_en                     : editingUserData.lastname_en,
+                firstname_th                     : editingUserData.firstname_th,
+                lastname_th                     : editingUserData.lastname_th,
+                username                        : editingUserData.username,
                 // PERSONAL
-                nickname            : editingUserData.nickname,
-                id_card_number      : editingUserData.id_card_number,
-                gender              : editingUserData.gender,
-                birth_date          : editingUserData.birth_date,
-                nationality         : editingUserData.nationality,
-                ethnic              : editingUserData.ethnic,
-                religion            : editingUserData.religion,
-                blood_group         : editingUserData.blood_group,
-                marital_status      : editingUserData.marital_status,
-                military_status     : editingUserData.military_status,
+                nickname                        : editingUserData.nickname,
+                identification_number            : editingUserData.identification_number,
+                gender                          : editingUserData.gender,
+                birth_date                      : editingUserData.birth_date,
+                nationality                     : editingUserData.nationality,
+                ethnic                          : editingUserData.ethnic,
+                religion                        : editingUserData.religion,
+                blood_group                     : editingUserData.blood_group,
+                marital_status                  : editingUserData.marital_status,
+                military_status                 : editingUserData.military_status,
                 // EMPLOYMENT
-                employee_running_number_uid: editingUserData.employee_running_number_uid,
-                id                  : editingUserData.id,
-                division            : editingUserData.division,
-                department          : editingUserData.department,
-                section             : editingUserData.section,
-                position            : editingUserData.position,
-                supervisor          : editingUserData.supervisor,
-                start_working_date  : editingUserData.start_working_date,
-                working_type        : editingUserData.working_type,
-                working_status      : editingUserData.working_status,
-                // ADDRESS
-                address_name        : editingUserData.address_name,
-                subdistrict         : editingUserData.subdistrict,
-                district            : editingUserData.district,
-                province            : editingUserData.province,
-                zipcode             : editingUserData.zipcode,
-                country             : editingUserData.country,
+                employee_running_number_uid     : editingUserData.employee_running_number_uid,
+                employee_id                     : editingUserData.employee_id,
+                division                        : editingUserData.division,
+                department                      : editingUserData.department,
+                section                         : editingUserData.section,
+                position                        : editingUserData.position,
+                supervisor                      : editingUserData.supervisor,
+                start_working_date              : editingUserData.start_working_date,
+                working_type                    : editingUserData.working_type,
+                working_status                  : editingUserData.working_status,
+                // CURRENT ADDRESS
+                current_address: {
+                    address_name                : editingUserData.current_address.address_name,
+                    sub_district                : editingUserData.current_address.sub_district,
+                    district                    : editingUserData.current_address.district,
+                    province                    : editingUserData.current_address.province,
+                    zipcode                     : editingUserData.current_address.zipcode,
+                    country                     : editingUserData.current_address.country,
+                },
+                // HOUSE REGISTRATION ADDRESS
+                house_registration_address: {
+                    address_name                : editingUserData.house_registration_address.address_name,
+                    sub_district                : editingUserData.house_registration_address.sub_district,
+                    district                    : editingUserData.house_registration_address.district,
+                    province                    : editingUserData.house_registration_address.province,
+                    zipcode                     : editingUserData.house_registration_address.zipcode,
+                    country                     : editingUserData.house_registration_address.country,
+                },
                 // CONTACT
-                phone               : editingUserData.phone,
-                fax                 : editingUserData.fax,
-                email               : editingUserData.email,
-                line_id             : editingUserData.line_id,
-                // PERMISSIONS
-                permissions         : editingUserData.permissions,
-                // OTHER
-                updated_at          : firebase.firestore.FieldValue.serverTimestamp(),
-                updated_by          : userData.fullname_en
+                private_phone_number            : editingUserData.private_phone_number,
+                company_phone_number            : editingUserData.company_phone_number,
+                fax_number                      : editingUserData.fax_number,
+                private_email                   : editingUserData.private_email,
+                company_email                   : editingUserData.company_email,
+                // PERMISSION
+                permissions_of_position         : editingUserData.permissions_of_position,
+                permissions_of_person           : editingUserData.permissions_of_person,
+                permissions_all                 : editingUserData.permissions_all,
+                // OTHERS
+                // favorites                       : editingUserData.favorites,
+                // METADATA
+                updated_at                      : firebase.firestore.FieldValue.serverTimestamp(),
+                updated_by                      : userData.firstname_en + userData.lastname_en,
+                updated_by_uid                  : userData.uid,
             })
-            await this.$router.push({name: 'organization-user-list'})
-            Notify.create({
-                type: "positive",
-                message: "Updated user information successfully !",
-                position: "bottom-right",
-                progress: true,
-                timeout: 10000,
-            })
+            showSimpleNotification({type: "positive", title: "Successfully", message: "Update user successfully", timeout: 5000})
         } catch (error) {
-            Dialog.create({title: "เกิดข้อผิดพลาดในการแก้ไขข้อมูล", message: error.message})
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
         }
     },
-    async functionsActivateUser(context, { userUID }) {
+    async firestoreActivateUser(context, { userUID }) {
         context.commit("SET_USER_IS_ACTIVATING", true)
         const dialog = Dialog.create({
             title: "Activating...",
-            progress: { spinner: QSpinner, color: "primary" },
+            progress: { spinner: QSpinnerOrbit, color: "primary" },
             persistent: true,
             ok: false,
         })
         try {
+            // INCREMENT ACTIVE USER & DECREMENT DISABLE USER WHEN CREATE USER
+            await docRef.doc("summary").get()
+                .then((response) => {
+                    if (response.exists) {
+                        let increment = firebase.firestore.FieldValue.increment(1)
+                        let decrement = firebase.firestore.FieldValue.increment(-1)
+                        docRef.doc("summary").update({total: response.data().total, active: increment, disable: decrement})
+                    } else {
+                        docRef.doc("summary").set({ total: 1, active: 0, disable: 1 })
+                    }
+                })
+
             let cloudFunctionsActivateUser = functions.httpsCallable('cloudFunctionsActivateUser')
             await cloudFunctionsActivateUser(userUID)
                 .then((response) => {
@@ -259,29 +283,42 @@ const actions = {
                         ok: true
                     })
                     context.dispatch('user/firestoreGetEditingUser', {editingUserUID: userUID}, {root: true})
+                    context.dispatch('user/firestoreGetSummary', {}, {root: true})
                     context.commit("SET_USER_IS_ACTIVATING", false)
                 })
                 .catch((error) => {
                     context.commit("SET_USER_IS_ACTIVATING", false)
-                    dialog.update({title: "Something went wrong", message: error.data.message, progress: false, ok: true})
+                    showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
                 })
         } catch (error) {
             context.commit("SET_USER_IS_ACTIVATING", false)
-            dialog.update({title: "เกิดข้อผิดพลาดในการแก้ไขข้อมูล", message: error.message, progress: false, ok: true})
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
         }
     },
-    async functionsDeactivateUser(context, {userUID}) {
+    async firestoreDeactivateUser(context, { userUID }) {
         context.commit("SET_USER_IS_DEACTIVATING", true)
         const dialog = Dialog.create({
             title: "Deactivating...",
             progress: {
-                spinner: QSpinner,
+                spinner: QSpinnerOrbit,
                 color: "primary",
             },
             persistent: true,
             ok: false,
         })
         try {
+            // INCREMENT DISABLE USER & DECREMENT ACTIVE USER WHEN CREATE USER
+            await docRef.doc("summary").get()
+                .then((response) => {
+                    if (response.exists) {
+                        let increment = firebase.firestore.FieldValue.increment(1)
+                        let decrement = firebase.firestore.FieldValue.increment(-1)
+                        docRef.doc("summary").update({total: response.data().total, active: decrement, disable: increment})
+                    } else {
+                        docRef.doc("summary").set({ total: 1, active: 0, disable: 1 })
+                    }
+                })
+
             let cloudFunctionsDeactivateUser = functions.httpsCallable('cloudFunctionsDeactivateUser')
             await cloudFunctionsDeactivateUser(userUID)
                 .then((response) => {
@@ -292,20 +329,25 @@ const actions = {
                         ok: true,
                     })
                     context.dispatch('user/firestoreGetEditingUser', {editingUserUID: userUID}, {root: true})
+                    context.dispatch('user/firestoreGetSummary', {}, {root: true})
                     context.commit("SET_USER_IS_DEACTIVATING", false)
                 })
                 .catch((error) => {
                     context.commit("SET_USER_IS_DEACTIVATING", false)
-                    dialog.update({title: "Something went wrong", message: error.data.message, progress: false, ok: true})
+                    showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
                 })
         } catch (error) {
             context.commit("SET_USER_IS_DEACTIVATING", false)
-            dialog.update({title: "เกิดข้อผิดพลาดในการแก้ไขข้อมูล", message: error.message, progress: false, ok: true})
+            showSimpleNotification({type: "negative", title: 'Error', message: error.message, timeout: 0})
         }
-    },
+    }
 }
 
-const getters = {}
+const getters = {
+    user(state) {
+        return state.user
+    }
+}
 
 export default {
     namespaced: true,

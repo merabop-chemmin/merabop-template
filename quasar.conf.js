@@ -18,7 +18,6 @@ module.exports = function (/* ctx */) {
         // --> boot files are part of "main.js"
         // https://quasar.dev/quasar-cli/boot-files
         boot: [
-
             'i18n',
             'axios',
             'firebase',
@@ -121,8 +120,8 @@ module.exports = function (/* ctx */) {
             workboxPluginMode: 'GenerateSW', // 'GenerateSW' or 'InjectManifest'
             workboxOptions: {}, // only for GenerateSW
             manifest: {
-                name: `MeSales`,
-                short_name: `MeSales`,
+                name: `MERABOP`,
+                short_name: `MRABOP`,
                 description: ``,
                 display: 'standalone',
                 orientation: 'portrait',

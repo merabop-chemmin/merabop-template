@@ -4,7 +4,7 @@
     </div>
 </template>
 <script>
-import { mapActions } from 'vuex'
+import {mapActions} from "vuex"
 export default {
     name: 'App',
     mounted() {
@@ -12,6 +12,6 @@ export default {
     },
     methods: {
         ...mapActions('auth', ['handleAuthStateChanged']),
-    },
+    }
 }
 </script>

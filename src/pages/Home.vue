@@ -1,11 +1,15 @@
 <template>
     <q-page class="flex flex-center">
-        <img src="https://tailwindui.com/img/logos/v1/workflow-mark-on-white.svg" alt="tailwind-ui-logo" style="width: 60px">
+        <img
+            alt="Quasar logo"
+            src="~assets/quasar-logo-vertical.svg"
+            style="width: 200px; height: 200px"
+        >
     </q-page>
 </template>
 
 <script>
 export default {
-
+    name: 'PageIndex'
 }
 </script>

@@ -1,10 +1,21 @@
-import { Dialog, LocalStorage } from "quasar";
-import { auth } from "src/boot/firebase"
+import {LocalStorage} from "quasar";
+import { auth, firestore, functions } from "boot/firebase";
 
 const state = {
     userIsSigningIn: false,
     userIsLoggedIn: false,
-    resetPasswordEmailIsSending: false,
+    sendingResetLink: false,
+    sentResetLink: false,
+    isError: false,
+    error: {
+        code: "",
+        message: "",
+    },
+    // CHECKING EXISTING EMAIL
+    inputEmail: "",
+    checkingExistingEmail: false,
+    existingUser: {},
+    userIsExisting: null,
 }
 
 const mutations = {
@@ -14,144 +25,76 @@ const mutations = {
     SET_USER_IS_LOGGED_IN(state, value) {
         state.userIsLoggedIn = value
     },
-    SET_RESET_PASSWORD_EMAIL_IS_SENDING(state, value) {
-        state.resetPasswordEmailIsSending = value
+    SET_SENDING_RESET_LINK(state, value) {
+        state.sendingResetLink = value
     },
+    SET_SENT_RESET_LINK(state, value) {
+        state.sentResetLink = value
+    },
+    SET_IS_ERROR(state, value) {
+        state.isError = value
+    },
+    SET_ERROR(state, payload) {
+        state.error = payload
+    },
+    SET_INPUT_EMAIL(state, payload) {
+        state.inputEmail = payload
+    },
+    SET_CHECKING_EXISTING_EMAIL(state, value) {
+        state.checkingExistingEmail = value
+    },
+    SET_EXISTING_USER(state, payload) {
+        state.existingUser = payload
+    },
+    SET_USER_IS_EXISTING(state, value) {
+        state.userIsExisting = value
+    }
 }
 
 const actions = {
-    async firebaseAuthSignInWithEmailAndPassword(context, {credentials}) {
+    async firebaseAuthSignInWithEmailAndPassword(context, {userData}) {
         context.commit("SET_USER_IS_SIGNING_IN", true)
         try {
-            const response = await auth.signInWithEmailAndPassword(credentials.email, credentials.password)
-            const user = await context.dispatch('user/firestoreGetUser', {userUID: response.user.uid}, {root: true})
-                .then(() => {
-                    context.dispatch('activity/firestoreCreateActivity', {
-                        activityData: {perform: "sign in", dataset: "authentication"},
-                        userData: context.rootState.user.user,
-                        snapshotData: {},
-                    }, {root: true}).then(() => {})
-                })
+            await auth.signInWithEmailAndPassword(userData.email, userData.password)
             context.commit("SET_USER_IS_SIGNING_IN", false)
         } catch (error) {
-            // IF USER IS NOT FOUND
-            if (error.code === "auth/user-not-found") {
-                Dialog.create({
-                    title: "User not found",
-                    message: `Not found user with email : (${credentials.email}). There is no user record corresponding to your provided email. The user may have been deleted or suspended.`,
-                    persistent: true,
-                }).onOk(() => {
-                    context.commit("SET_USER_IS_SIGNING_IN", false)
-                })
-                // IF WRONG PASSWORD
-            } else if (error.code === "auth/wrong-password") {
-                Dialog.create({
-                    title: "Wrong password",
-                    message: `The password is invalid or incorrect.`,
-                    persistent: true,
-                }).onOk(() => {
-                    context.commit("SET_USER_IS_SIGNING_IN", false)
-                })
-            } else if (error.code === "auth/invalid-email") {
-                Dialog.create({
-                    title: "Invalid email",
-                    message: `Your provided email : (${credentials.email}) is invalid. Please try again with a valid email like example@domain.com`,
-                    persistent: true,
-                }).onOk(() => {
-                    context.commit("SET_USER_IS_SIGNING_IN", false)
-                })
-            } else if (error.code === "auth/user-disabled") {
-                Dialog.create({
-                    dark: true,
-                    title: "User disabled",
-                    message: `Your provided email : (${credentials.email}) is disabled by the administrator. Please contact your administrator to enable your email.`,
-                    persistent: true,
-                }).onOk(() => {
-                    context.commit("SET_USER_IS_SIGNING_IN", false)
-                })
-            } else {
-                Dialog.create({
-                    title: "Error",
-                    message: error.message,
-                    persistent: true,
-                }).onOk(() => {
-                    context.commit("SET_USER_IS_SIGNING_IN", false)
-                })
-            }
+            context.commit("SET_IS_ERROR", true)
+            context.commit("SET_ERROR", {code: error.code, message: error.message})
         }
     },
-    async firebaseSignOut() {
+    async firebaseAuthSendPasswordResetEmail(context, {email}) {
+        context.commit("SET_SENDING_RESET_LINK", true)
+        try {
+            await auth.sendPasswordResetEmail(email).then(() => {
+                context.commit("SET_SENT_RESET_LINK", true)
+                context.commit("SET_SENDING_RESET_LINK", false)
+            })
+        } catch (error) {
+            context.commit("SET_SENDING_RESET_LINK", false)
+            context.commit("SET_ERROR", {code: error.code, message: error.message})
+        }
+    },
+    async firebaseAuthSignOut(context) {
         try {
             await auth.signOut()
-        }
-        catch (error) {
-
+        } catch (error) {
+            context.commit("SET_ERROR", {code: error.code, message: error.message})
         }
     },
-    firebaseAuthSendPasswordResetEmail(context, resetPasswordEmail) {
-        context.commit("SET_RESET_PASSWORD_EMAIL_IS_SENDING", true)
-        auth.sendPasswordResetEmail(resetPasswordEmail)
-            .then(() => {
-                Dialog.create({
-                    title: "Email sent",
-                    message: `Please check your email (${resetPasswordEmail}) to set your new password.`,
-                    persistent: true,
-                }).onOk(() => {
-                    context.commit("SET_RESET_PASSWORD_EMAIL_IS_SENDING", false)
-                })
-            })
-            .catch((error) => {
-                if (error.code === 'auth/invalid-email') {
-                    Dialog.create({
-                        title: "Invalid email",
-                        message: `Your provided email : (${resetPasswordEmail}) is invalid. Please try again with a valid email like example@domain.com.`,
-                        persistent: true,
-                    }).onOk(() => {
-                        context.commit("SET_RESET_PASSWORD_EMAIL_IS_SENDING", false)
-                    })
-                } else if (error.code === 'auth/user-not-found') {
-                    Dialog.create({
-                        title: "User not found",
-                        message: `Not found user with email : (${resetPasswordEmail}). There is no user record corresponding to your provided email. The user may have been deleted or suspended.`,
-                        persistent: true,
-                    }).onOk(() => {
-                        context.commit("SET_RESET_PASSWORD_EMAIL_IS_SENDING", false)
-                    })
-                } else {
-                    Dialog.create({
-                        title: "Error",
-                        message: error.message,
-                        persistent: true,
-                    }).onOk(() => {
-                        context.commit("SET_RESET_PASSWORD_EMAIL_IS_SENDING", false)
-                    })
-                }
-            })
-    },
-    handleAuthStateChanged(context) {
-        auth.onAuthStateChanged((user) => {
+    async handleAuthStateChanged(context) {
+        await auth.onAuthStateChanged((user) => {
             if (user) {
-                // if (user.verify) {
-                // let user = firebase.auth().currentUser
-                // user.sendEmailVerification()
-                // .then()
-                // .catch((error) => {
-                //
-                // })
-                // } else {
-                // DOING THE SAMEs
-                // }
-                context.commit('SET_USER_IS_LOGGED_IN', true)
+                context.commit("SET_USER_IS_LOGGED_IN", true)
                 LocalStorage.set('userIsLoggedIn', true)
                 context.dispatch('user/firestoreGetUser', {userUID: user.uid}, {root: true}).then(() => {})
-                this.$router.push({ name: 'home' }).catch(() => {})
+                this.$router.push({name: "home"}).catch(() => {})
             } else {
-                context.commit('SET_USER_IS_LOGGED_IN', false)
+                context.commit("SET_USER_IS_LOGGED_IN", false)
                 LocalStorage.set('userIsLoggedIn', false)
                 this.$router.replace({ name: 'sign-in' }).catch(() => {})
             }
         })
-    },
+    }
 }
 
 const getters = {

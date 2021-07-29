@@ -1,9 +1,9 @@
 {
-  "name": "merabop-sales",
+  "name": "merabop",
   "version": "0.0.1",
   "description": "",
-  "productName": "MeSales",
-  "author": "Jiranop P. <jiranop.p.cmt@gmail.com>",
+  "productName": "MERABOP",
+  "author": "Strategic Decitioning System Department",
   "private": true,
   "scripts": {
     "test": "echo \"No test specified\" && exit 0"

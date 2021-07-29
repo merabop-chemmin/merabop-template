@@ -1,9 +1,9 @@
 <template>
-    <div class="text-subtitle2 text-secondary q-mb-xs">
+    <div class="text-subtitle2 text-dark">
         <slot></slot>
         <span v-if="required"> * </span>
-        <q-icon v-if="tooltip" class="q-mb-xs cursor-pointer" color="primary" name="eva-external-link-outline" @click="handleClickButton">
-            <q-tooltip anchor="center middle" content-style="font-size: 14px" self="center left"> {{ helpText }}</q-tooltip>
+        <q-icon v-if="tooltip" class="q-mb-xs cursor-pointer" color="primary" :name="tooltipIcon" @click="handleClickButton">
+            <q-tooltip anchor="center middle" content-style="font-size: 14px" self="center left"> {{ tooltipText }}</q-tooltip>
         </q-icon>
     </div>
 </template>
@@ -19,9 +19,13 @@ export default {
             type: Boolean,
             default: false,
         },
-        helpText: {
+        tooltipIcon: {
             type: String,
-            default: "please enter help text.",
+            default: "eva-info-outline",
+        },
+        tooltipText: {
+            type: String,
+            default: "please enter tooltip text",
         }
     },
     methods: {
