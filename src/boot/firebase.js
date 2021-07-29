@@ -6,13 +6,13 @@ import "firebase/functions"
 import "firebase/storage"
 
 let firebaseConfig = {
-    apiKey: "AIzaSyA-GzOdVKawtU7cuD1ukG_vMf6YZxIREMc",
-    authDomain: "me-crypto.firebaseapp.com",
-    projectId: "me-crypto",
-    storageBucket: "me-crypto.appspot.com",
-    messagingSenderId: "204407465520",
-    appId: "1:204407465520:web:7d53d63e776301ae2d6ff5",
-    measurementId: "G-C5LX9VE4SC"
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: "",
+    measurementId: ""
 }
 
 let firebaseApp     = firebase.initializeApp(firebaseConfig)
